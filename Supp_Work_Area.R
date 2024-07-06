@@ -167,3 +167,63 @@ build_url <- function(base_url = "https://aviationweather.gov/api/data/",
 #top_special <- build_url(endpoint = "airport", icaoIDs = "@TOPE");top_special;
 #us_special <- build_url(endpoint = "airport", icaoIDs = "@USW");us_special;
 
+
+
+metar_json_URL <- build_url(endpoint = "metar", hours = 48, time = "issue")
+metar_dataGET <- httr::GET(metar_json_URL)
+metar_parsed <- fromJSON(rawToChar(metar_dataGET$content))
+metar_parsed_tibb <- as_tibble(metar_parsed)
+metar_parsed_tibb <- metar_parsed_tibb |> 
+  select(metar_id, icaoId, obsTime, reportTime, temp, wspd, visib) |> 
+  filter(str_starts(icaoId,"K"))
+metar_parsed_tibb
+
+taf_json_URL <- build_url(endpoint = "taf", icaoIDs = "FL", hours = 48, time = "issue")
+taf_dataGET <- httr::GET(taf_json_URL)
+taf_parsed <- fromJSON(rawToChar(taf_dataGET$content))
+taf_parsed_tibb <- as_tibble(taf_parsed)
+taf_parsed_tibb <- taf_parsed_tibb |>
+  select(taf)
+
+airport_json_URL <- build_url(endpoint = "airport", icaoIDs = "FL")
+airport_dataGET <- httr::GET(airport_json_URL)
+airport_parsed <- fromJSON(rawToChar(airport_dataGET$content))
+airport_parsed_tibb <- as_tibble(airport_parsed)
+airport_parsed_tibb
+
+
+
+
+
+
+
+When I ran:       build_url(endpoint = "metar", icaoIDs = "KATL")
+What I got:       "https://aviationweather.gov/api/data/metar?format=json&ids=KATL"
+I was expecting:  "https://aviationweather.gov/api/data/metar?ids=KATL&format=json"
+
+When I ran:       build_url(endpoint = "metar", icaoIDs = "KATL,KAPF")
+What I got:       "https://aviationweather.gov/api/data/metar?format=json&ids=KATL%20KAPF"
+I was expecting:  "https://aviationweather.gov/api/data/metar?ids=KATL%20KAPF&format=json"
+
+When I ran:       build_url(endpoint = "metar", icaoIDs = "@NC")
+What I got:       "https://aviationweather.gov/api/data/metar?format=json"
+I was expecting:  "https://aviationweather.gov/api/data/metar?ids=%40NC&format=json"
+
+When I ran:       build_url(endpoint = "metar", icaoIDs = "#US")
+What I got:       "https://aviationweather.gov/api/data/metar?format=json&ids=%23US"
+I was expecting:  "https://aviationweather.gov/api/data/metar?ids=%23US&format=json"
+
+When I ran:       build_url(endpoint = "metar", icaoIDs = "@TOPE")
+What I got:       "https://aviationweather.gov/api/data/metar?format=json&ids=%40TOPE"
+I was expecting:  "https://aviationweather.gov/api/data/metar?ids=%40TOPE&format=json"
+
+When I ran:       build_url(endpoint = "metar", icaoIDs = "@USW")
+What I got:       "https://aviationweather.gov/api/data/metar?format=json&ids=%40USW"
+I was expecting:  "https://aviationweather.gov/api/data/metar?ids=%40USE&format=json"
+
+https://aviationweather.gov/api/data/metar?ids=KATL%20KAPF&format=json #SPACE
+https://aviationweather.gov/api/data/metar?ids=KATL%2CKAPF&format=json #COMMA
+
+https://aviationweather.gov/api/data/metar?ids=KATL%20KAPF%20KMCI&format=json #SPACE
+https://aviationweather.gov/api/data/metar?ids=KATL%2CKAPF%2CKMCI&format=json #COMMA
+

@@ -1,33 +1,36 @@
-#
-# This is the user-interface definition of a Shiny web application. You can
-# run the application by clicking 'Run App' above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    https://shiny.posit.co/
-#
+library(shinydashboard)
 
-library(shiny)
-
-# Define UI for application that draws a histogram
-fluidPage(
-
-    # Application title
-    titlePanel("Old Faithful Geyser Data"),
-
-    # Sidebar with a slider input for number of bins
-    sidebarLayout(
-        sidebarPanel(
-            sliderInput("bins",
-                        "Number of bins:",
-                        min = 1,
-                        max = 50,
-                        value = 30)
-        ),
-
-        # Show a plot of the generated distribution
-        mainPanel(
-            plotOutput("distPlot")
-        )
+ui <- dashboardPage(
+  dashboardHeader(title = "Aviation Dashboard"),
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Wind", tabName = "wind"),
+      menuItem("Visibility", tabName = "visibility"),
+      menuItem("Temperature", tabName = "temperature"),
+      menuItem("Airport Statistics", tabName = "airport_stats"),
+      menuItem("Data Download", tabName = "data_download"),
+      menuItem("Data Exploration", tabName = "data_exploration"),
+      menuItem("About", tabName = "about")
     )
+  ),
+  dashboardBody(
+    tabItems(
+      tabItem(tabName = "wind",
+              h2("Wind Data")),
+      tabItem(tabName = "visibility",
+              h2("Visibility Data")),
+      tabItem(tabName = "temperature",
+              h2("Temperature Data")),
+      tabItem(tabName = "airport_stats",
+              h2("Airport Statistics")),
+      tabItem(tabName = "data_download",
+              h2("Data Download")),
+      tabItem(tabName = "data_exploration",
+              h2("Data Exploration")),
+      tabItem(tabName = "about",
+              h2("About This Dashboard"))
+    )
+  )
 )
+
+shinyApp(ui = ui, server = function(input, output) {})
