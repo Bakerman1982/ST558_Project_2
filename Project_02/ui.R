@@ -8,6 +8,7 @@
 #
 
 library(shiny)
+
 library(shinydashboard)
 
 # Define UI for application that draws a histogram
@@ -25,10 +26,15 @@ fluidPage(
              sidebarLayout(
                sidebarPanel(
                  # Text input for icaoID
-                 textInput("icaoID", "ICAO ID:", placeholder = "Enter ICAO ID"),
+                 textInput("icaoID", "ICAO ID:", placeholder = "Enter valid icaoID"),
+                 tags$small("See Valid icaoID tab for acceptable entries"),
                  
                  # Text input for hours
-                 textInput("hours", "Hours:", placeholder = "Enter hours")
+                 textInput("hours", "Hours:", placeholder = "Enter hours"),
+                 tags$small("Enter a number corresponding to how far back for data retrieval. Leave blank for 24 hours."),
+                 
+                 # Button to update plot and table
+                 actionButton("updateButton", "Update")
                ),
                mainPanel(
                  plotOutput("windPlot"),
@@ -39,23 +45,18 @@ fluidPage(
     ),
     
     # Second tab: Visibility
-    tabPanel("Visibility",
+    tabPanel("Temperature",
              sidebarLayout(
                sidebarPanel(
-                 sliderInput("visibilityBins",
-                             "Number of bins:",
-                             min = 1,
-                             max = 50,
-                             value = 30)
                ),
                mainPanel(
-                 plotOutput("visibilityPlot")
                )
              )
     ),
     
+    
     # Third tab: Temperature
-    tabPanel("Temperature",
+    tabPanel("Visib",
              sidebarLayout(
                sidebarPanel(
                  sliderInput("temperatureBins",
@@ -121,6 +122,24 @@ fluidPage(
                h3("About This Dashboard"),
                p("This dashboard provides insights into aviation data, including wind, visibility, temperature, airport statistics, data download, and exploration features.")
              )
-    )
-  )
+    ),
+    
+
+    tabPanel("Valid icaoIDs",
+             sidebarLayout(
+               sidebarPanel(
+                 selectInput("icao_category", "Select ICAO Category",
+                             choices = c("@TOP", "@TOPE", "@TOPC", "@TOPW", "@USN", "@USS", "@USE", "@USW", "#US", "<state>")),
+                 uiOutput("state_dropdown")  # For dynamically generating the state dropdown
+               ),
+               mainPanel(
+                 textOutput("category_description"),
+                 tableOutput("icao_table")
+               )
+             )
+    ) 
+    
+    
+    
+)
 )
