@@ -187,9 +187,6 @@ server <- function(input, output) {
   return(parsed_tibble)
 }
 
-
-
-  
   
 ################################  
 ## Server function definition ##
@@ -283,11 +280,25 @@ server <- function(input, output) {
   })
 
   
-  
-  
-  
-  
-  
+##############
+## TEMP TAB ##
+##############
+
+####################
+## VISIBILITY TAB ##
+####################
+
+########################
+## AIRPORT STATISTICS ##
+########################
+
+###################
+## DATA DOWNLOAD ##
+###################
+
+######################
+## DATA EXPLORATION ##
+######################
 
 ################
 ## icoaID TAB ##
@@ -342,7 +353,7 @@ server <- function(input, output) {
       metar_loc <- metar_loc %>%
         select(icaoId, name, state) %>%
         group_by(state) %>%
-        arrange(state) %>%
+        arrange(name) %>%  # Changed to arrange by name
         mutate(name = str_remove(name, ",.*")) %>%
         distinct(name, .keep_all = TRUE)
       
@@ -353,10 +364,6 @@ server <- function(input, output) {
     metar_loc
   })
   
-  
-  
-  
-    
 } #end curly brace.  dont delete it. 
 
 
