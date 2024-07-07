@@ -6,8 +6,6 @@
 #
 #    https://shiny.posit.co/
 #
-#install.packages("lwgeom")
-#library(lwgeom)
 
 require(shiny)
 require(tidyverse)
@@ -24,18 +22,24 @@ require(rnaturalearth)
 require(rnaturalearthdata)
 require(lwgeom)
 library(viridis)
+library(ggridges)
 
 #optional
 #theme_set(theme_bw())
 
 ## URL building function ##
-build_url <- function(base_url = "https://aviationweather.gov/api/data/", 
-                      endpoint, 
-                      icaoIDs = "#US", 
-                      hours = NULL, 
-                      time = "valid") {
-  
-  
+
+server <- function(input, output) {
+
+  # Define build_url function with necessary parameters
+  build_url <- function(endpoint = "metar",
+                        icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US",
+                        hours = if (!is.null(input$hours) && input$hours != "") as.numeric(input$hours) else 24,
+                        time = "valid") {
+    
+    # Base URL for API
+    base_url <- "https://aviationweather.gov/api/data/"
+    
   # Helper vector for verifying proper use of "@" + state_abbreviations
   valid_states <- paste0("@", c("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
                                 "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
@@ -183,14 +187,56 @@ build_url <- function(base_url = "https://aviationweather.gov/api/data/",
 }
 
 
-# Define server logic
-server <- function(input, output) {
 
+  
+  
+################################  
+## Server function definition ##
+################################
 
-  # Wind tab plot
+##############
+## WIND TAB ##
+##############
+  
+# Reactive expression to fetch data from the API
+  metar_data_reactive <- reactive({
+    build_url(
+      endpoint = "metar",
+      icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US",
+      hours = if (!is.null(input$hours) && input$hours != "") as.numeric(input$hours) else NULL)
+  })  
+  
+# Function to generate dynamic frequency table titles based on icaoID input
+  generate_table_title <- function(icaoID) {
+    if (icaoID == "@TOP") {
+      "Frequency Table for wind speeds of Top 30 Airports"
+    } else if (icaoID == "@TOPE") {
+      "Frequency Table for wind speeds for the Top 30 Eastern Airports"
+    } else if (icaoID == "@TOPC") {
+      "Frequency Table for wind speeds for the Top 30 Central Airports"
+    } else if (icaoID == "@TOPW") {
+      "Frequency Table for wind speeds for the Top 30 Western Airports"
+    } else if (icaoID == "@USN") {
+      "Frequency Table for wind speeds for all Northern Airports"
+    } else if (icaoID == "@USS") {
+      "Frequency Table for wind speeds for all Southern Airports"
+    } else if (icaoID == "@USE") {
+      "Frequency Table for wind speeds for all Eastern Airports"
+    } else if (icaoID == "@USW") {
+      "Frequency Table for wind speeds for all Western Airports"
+    } else if (grepl("^@[A-Z]{2}$", icaoID)) {
+      state_abbr <- substr(icaoID, 2, 3)
+      paste("Frequency Table for wind speeds of", state_abbr, "Airports")
+    } else if (icaoID == "#US" || icaoID == "") {
+      "Frequency Table for wind speeds of all US Airports"
+    } else {
+      paste("Frequency Table for wind speeds of", icaoID, "Airports")
+    }}  
+  
+  
+# Wind tab plot
   output$windPlot <- renderPlot({
-    # Fetch data from the API
-    metar_data <- build_url(endpoint = "metar")
+    metar_data <- metar_data_reactive()
     
     # Ensure 'state' is a factor and 'wspd' is numeric
     metar_data$state <- as.factor(metar_data$state)
@@ -209,52 +255,32 @@ server <- function(input, output) {
     metar_data$state <- factor(metar_data$state, levels = mean_wspd$state)
     
     # Generate the density ridges plot
-    ggplot(metar_data, aes(x = wspd, y = state, fill = ..x.., group = state)) +
-      geom_density_ridges_gradient(scale = 3, rel_min_height = 0.01) +
+    ggplot(metar_data, aes(x = wspd, y = state, fill = after_stat(x), group = state)) +
+      geom_density_ridges_gradient(scale = 3, rel_min_height = 0.01, xlim = c(0, 50)) +
       scale_fill_viridis_c(name = "Wind Speed", option = "C") +
       labs(title = 'Wind Speed by State') +
-      theme_minimal()
+      scale_fill_viridis(direction = -1) + theme_minimal()
   })
   
-  # Visibility tab plot
-  output$visibilityPlot <- renderPlot({
-    # Placeholder: Generate a histogram for visibility data
-    hist(rnorm(input$visibilityBins), main = "Visibility Data", xlab = "Visibility", col = "green")
+  # Render the table title
+  output$windTableTitle <- renderUI({
+    req(input$icaoID)
+    h4(generate_table_title(input$icaoID))
   })
   
-  # Temperature tab plot
-  output$temperaturePlot <- renderPlot({
-    # Placeholder: Generate a histogram for temperature data
-    hist(rnorm(input$temperatureBins), main = "Temperature Data", xlab = "Temperature", col = "red")
-  })
-  
-  # Airport Statistics tab plot
-  output$airportStatsPlot <- renderPlot({
-    # Placeholder: Generate a histogram for airport statistics data
-    hist(rnorm(input$airportStatsBins), main = "Airport Statistics Data", xlab = "Statistics", col = "purple")
-  })
-  
-  # Data Download tab
-  output$dataTable <- renderTable({
-    # Placeholder: Display a sample data table
-    head(mtcars)
-  })
-  
-  output$downloadData <- downloadHandler(
-    filename = function() {
-      paste("data-", Sys.Date(), ".csv", sep = "")
-    },
-    content = function(file) {
-      write.csv(mtcars, file)
-    }
-  )
-  
-  # Data Exploration tab
-  output$contents <- renderTable({
-    req(input$file1)
-    inFile <- input$file1
+  # This section creates and render the contingency table
+  output$windTable <- renderTable({
+    metar_data <- metar_data_reactive()
     
-    df <- read.csv(inFile$datapath, header = TRUE, sep = ",")
-    head(df)
+    # Create wind speed ranges
+    metar_data <- metar_data %>%
+      mutate(wspd_ranges = cut(wspd, breaks = c(0, 5, 10, 15, Inf), labels = c("0-5", "6-10", "11-15", ">15")))
+    
+    # Create contingency table
+    state_vs_wspd <- table(metar_data$state, metar_data$wspd_ranges)
+    as.data.frame.matrix(state_vs_wspd)
   })
+  
+  
+  # Other output definitions for different tabs...
 }

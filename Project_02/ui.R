@@ -14,7 +14,7 @@ library(shinydashboard)
 fluidPage(
   
   # Application title
-  titlePanel("Aviation Dashboard"),
+  titlePanel("Aviation Weather Dashboard"),
   
   # Navigation bar with seven tabs
   navbarPage(
@@ -24,31 +24,16 @@ fluidPage(
     tabPanel("Wind",
              sidebarLayout(
                sidebarPanel(
-                 
-                 # Dropdown menu for choosing endpoint
-                 selectInput("endpoint", "Choose Endpoint:",
-                             choices = c("metar", "taf", "airport"),
-                             selected = "metar"),
-                 
                  # Text input for icaoID
-                 conditionalPanel(
-                   condition = "input.endpoint != 'airport'",
-                   textInput("icaoID", "ICAO ID:", placeholder = "Enter ICAO ID")
-                 ),
+                 textInput("icaoID", "ICAO ID:", placeholder = "Enter ICAO ID"),
                  
-                 # Text input for hours or time based on endpoint
-                 conditionalPanel(
-                   condition = "input.endpoint == 'metar'",
-                   textInput("hours", "Hours:", placeholder = "Enter hours")
-                 ),
-                 conditionalPanel(
-                   condition = "input.endpoint == 'taf'",
-                   textInput("time", "Time:", placeholder = "Enter time")
-                 )
-                 
+                 # Text input for hours
+                 textInput("hours", "Hours:", placeholder = "Enter hours")
                ),
                mainPanel(
-                 plotOutput("windPlot")
+                 plotOutput("windPlot"),
+                 uiOutput("windTableTitle"),
+                 tableOutput("windTable")
                )
              )
     ),
@@ -139,8 +124,3 @@ fluidPage(
     )
   )
 )
-
-
-
-
-
