@@ -23,6 +23,7 @@ require(rnaturalearth)
 require(rnaturalearthdata)
 require(lwgeom)
 library(viridis)
+library(DT)
 library(ggridges)
 
 #optional
@@ -196,7 +197,7 @@ server <- function(input, output) {
 ## WIND TAB ##
 ##############
   
-  # Reactive expression to fetch data from the API
+
   # Reactive expression to fetch data from the API when updateButton is clicked
   metar_data_reactive <- eventReactive(input$updateButton, {
     build_url(
@@ -284,18 +285,248 @@ server <- function(input, output) {
 ## TEMP TAB ##
 ##############
 
+  # Reactive expression to fetch data from the API when updateButton is clicked
+  metar_data_reactive <- eventReactive(input$updateButton, {
+    build_url(
+      endpoint = "metar",
+      icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US",
+      hours = if (!is.null(input$hours) && input$hours != "") as.numeric(input$hours) else 24)
+  })
+  
+  # Reactive expression to process temperature data from the fetched metar data
+  temp_data_reactive <- eventReactive(input$updateButton, {
+    metar_data <- metar_data_reactive()
+    
+    # Example data processing step (adjust according to your actual data structure)
+    # Assuming metar_data contains columns: state, temp
+    
+    temp_data <- metar_data %>%
+      filter(!is.na(temp)) %>%
+      group_by(state) %>%
+      summarise(max_temp = max(temp, na.rm = TRUE),
+                min_temp = min(temp, na.rm = TRUE),
+                temp_range = max_temp - min_temp) %>%
+      pivot_longer(cols = c(max_temp, min_temp), 
+                   names_to = "temperature_type", 
+                   values_to = "temperature")
+    
+    temp_data
+  })
+  
+  # Render the temperature bar chart
+  output$tempBarChart <- renderPlot({
+    temp_data <- temp_data_reactive()
+    
+    # Example plot: Bar chart for max and min temperatures
+    if (!is.null(temp_data) && nrow(temp_data) > 0) {
+      ggplot(temp_data, aes(x = state, y = temperature, fill = temperature_type)) +
+        geom_bar(stat = "identity", position = "dodge") +
+        labs(x = "State", y = "Temperature (°C)", title = "Max and Min Temperatures by State") +
+        theme_minimal() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    } else {
+      ggplot() + theme_minimal() + labs(title = "No data available")
+    }
+  })
+  
+  # Render the summary table
+  output$tempSummaryTable <- renderTable({
+    temp_data <- temp_data_reactive()
+    
+    if (!is.null(temp_data) && nrow(temp_data) > 0) {
+      summary_table <- temp_data %>%
+        group_by(state) %>%
+        summarise(temp_min = min(temperature[temperature_type == "min_temp"], na.rm = TRUE),
+                  temp_max = max(temperature[temperature_type == "max_temp"], na.rm = TRUE),
+                  temp_range = temp_max - temp_min)
+      
+      summary_table
+    } else {
+      NULL
+    }
+  })
+  
+  # UI part for summary table
+  output$tempSummaryTitle <- renderUI({
+    if (!is.null(temp_data_reactive()) && nrow(temp_data_reactive()) > 0) {
+      h4("Temperature Summary by State")
+    }
+  })
+  
+  
+  
 ####################
 ## VISIBILITY TAB ##
 ####################
 
+  # Reactive expression to fetch data from the API when updateButton is clicked
+  metar_data_reactive_visib <- eventReactive(input$updateButton_visib, {
+    build_url(
+      endpoint = "metar",
+      icaoIDs = if (!is.null(input$icaoID_visib) && input$icaoID_visib != "") input$icaoID_visib else "#US",
+      hours = if (!is.null(input$hours_visib) && input$hours_visib != "") as.numeric(input$hours_visib) else 24)
+  })
+  
+  # Reactive expression to process visibility data from the fetched metar data
+  visib_data_reactive <- eventReactive(input$updateButton_visib, {
+    metar_data <- metar_data_reactive_visib()
+    
+    # Filter out rows with missing visib values
+    visib_data <- metar_data %>%
+      filter(!is.na(visib)) %>%
+      group_by(state) %>%
+      summarise(visib_min = min(visib, na.rm = TRUE),
+                visib_max = max(visib, na.rm = TRUE),
+                visib_range = visib_max - visib_min)
+    
+    visib_data
+  })
+  
+  # Render the visibility heatmap
+  output$visibHeatmap <- renderPlot({
+    visib_data <- visib_data_reactive()
+    
+    # Example plot: Heatmap for average visibility by state
+    if (!is.null(visib_data) && nrow(visib_data) > 0) {
+      ggplot(visib_data, aes(x = state, y = 1, fill = visib_min)) +
+        geom_tile() +
+        scale_fill_gradient(low = "blue", high = "red", name = "Minimum Visibility") +
+        labs(x = "State", y = "", title = "Minimum Visibility by State") +
+        theme_minimal() +
+        theme(axis.text.y = element_blank(),
+              axis.ticks.y = element_blank(),
+              axis.title.y = element_blank())
+    } else {
+      ggplot() + theme_minimal() + labs(title = "No data available")
+    }
+  })
+  
+  # Render the summary table
+  output$visibSummaryTable <- renderTable({
+    visib_data <- visib_data_reactive()
+    
+    if (!is.null(visib_data) && nrow(visib_data) > 0) {
+      visib_data %>%
+        select(state, visib_min, visib_max, visib_range)
+    } else {
+      NULL
+    }
+  })
+  
+  # UI part for summary table
+  output$visibSummaryTitle <- renderUI({
+    if (!is.null(visib_data_reactive()) && nrow(visib_data_reactive()) > 0) {
+      h4("Visibility Summary by State")
+    }
+  })
+  
+  
+  
 ########################
 ## AIRPORT STATISTICS ##
 ########################
 
+  # server.R
+  
+  # Reactive expression to fetch data from the API when updateButton is clicked
+  airport_data_reactive <- eventReactive(input$updateButton, {
+    build_url(
+      endpoint = "airport",
+      icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US"
+    )
+  })
+  
+  # Render the plot using ggplot in a reactive environment
+  output$airport_plot <- renderPlot({
+    data <- airport_data_reactive()
+    
+    # Ensure runway_length and runway_width are numeric
+    data$runway_length <- as.numeric(data$runway_length)
+    data$runway_width <- as.numeric(data$runway_width)
+    
+    # Convert rwyType to factor if needed
+    data$rwyType <- factor(data$rwyType, levels = c("S", "M", "L"))
+    
+    # Plotting using ggplot with a horizontal violin plot
+    ggplot(data, aes(y = runway_length, x = runway_width, fill = rwyType)) +
+      geom_violin(scale = "width", draw_quantiles = c(0.25, 0.5, 0.75)) +
+      scale_fill_manual(values = c("S" = "#66c2a5", "M" = "#fc8d62", "L" = "#8da0cb")) +
+      guides(color = FALSE) +
+      theme_minimal() +
+      theme(
+        # Adjust plot dimensions if needed
+        plot.background = element_rect(fill = "white"),
+        plot.margin = margin(10, 10, 10, 10, "pt")
+      ) +
+      labs(
+        x = "Runway Width",
+        y = "Runway Length",
+        fill = "Runway Type",
+        title = "Airport Runway Statistics",
+        subtitle = "Distribution of runway lengths and widths by type"
+      )
+  })
+  
+  
 ###################
 ## DATA DOWNLOAD ##
 ###################
 
+  # Function to build API URL based on user inputs
+  build_url <- function(endpoint, icaoID, hours) {
+    base_url <- "https://your.api.endpoint/"
+    url <- paste0(base_url, endpoint, "?")
+    url <- paste0(url, "icaoID=", icaoID, "&")  # Add ICAO ID
+    url <- paste0(url, "hours=", hours)         # Add hours
+    return(url)
+  }
+  
+  # Define the server function
+  server <- function(input, output, session) {
+    
+    # Reactive function to fetch data based on API URL
+    fetched_data <- reactive({
+      url <- build_url(input$endpoint, input$icaoID, input$hours)
+      data <- fetch_data_from_api(url)
+      return(data)
+    })
+    
+    # Display first 10 rows of data on button click
+    output$first10Rows <- renderTable({
+      req(input$updateButton)  # Ensure updateButton is clicked
+      head(fetched_data(), 10)
+    })
+    
+    # Save data to file based on selected format
+    observeEvent(input$downloadButton, {
+      data <- fetched_data()
+      
+      if (input$fileFormat == "csv") {
+        filename <- "downloaded_data.csv"
+        write.csv(data, filename, row.names = FALSE)
+      } else if (input$fileFormat == "xls") {
+        filename <- "downloaded_data.xlsx"
+        openxlsx::write.xlsx(data, filename)
+      }
+      
+      # Provide download link
+      output$downloadLink <- downloadHandler(
+        filename = function() {
+          filename
+        },
+        content = function(file) {
+          file.copy(filename, file)
+        }
+      )
+      
+      # Trigger download prompt
+      session$clientData$url_downloadLink <- output$downloadLink$href
+    })
+  }
+  
+  # Return the server function
+  server
+  
 ######################
 ## DATA EXPLORATION ##
 ######################

@@ -8,9 +8,8 @@
 #
 
 library(shiny)
-
 library(shinydashboard)
-
+library(DT)
 # Define UI for application that draws a histogram
 fluidPage(
   
@@ -44,74 +43,131 @@ fluidPage(
              )
     ),
     
-    # Second tab: Visibility
+    # Second tab: Temperature
     tabPanel("Temperature",
              sidebarLayout(
                sidebarPanel(
+                 # Text input for icaoID
+                 textInput("icaoID", "ICAO ID:", placeholder = "Enter valid icaoID"),
+                 tags$small("See Valid icaoID tab for acceptable entries"),
+                 
+                 # Text input for hours
+                 textInput("hours", "Hours:", placeholder = "Enter hours"),
+                 tags$small("Enter a number corresponding to how far back for data retrieval. Leave blank for 24 hours."),
+                 
+                 # Button to update plot and table
+                 actionButton("updateButton", "Update")
                ),
                mainPanel(
+                 plotOutput("tempPlot"),
+                 uiOutput("tempTableTitle"),
+                 tableOutput("tempTable"),
+                 # Add a plot for temperature bar chart
+                 plotOutput("tempBarChart"),
+                 # Add title and table for temperature summary
+                 uiOutput("tempSummaryTitle"),
+                 tableOutput("tempSummaryTable")
                )
              )
     ),
     
-    
-    # Third tab: Temperature
-    tabPanel("Visib",
+    # Third tab: Visibility
+    tabPanel("Visibility",
              sidebarLayout(
                sidebarPanel(
-                 sliderInput("temperatureBins",
-                             "Number of bins:",
-                             min = 1,
-                             max = 50,
-                             value = 30)
+                 # Text input for icaoID
+                 textInput("icaoID_visib", "ICAO ID:", placeholder = "Enter valid icaoID"),
+                 tags$small("See Valid icaoID tab for acceptable entries"),
+                 
+                 # Text input for hours
+                 textInput("hours_visib", "Hours:", placeholder = "Enter hours"),
+                 tags$small("Enter a number corresponding to how far back for data retrieval. Leave blank for 24 hours."),
+                 
+                 # Button to update plot and table
+                 actionButton("updateButton_visib", "Update")
                ),
                mainPanel(
-                 plotOutput("temperaturePlot")
+                 plotOutput("visibHeatmap"),
+                 uiOutput("visibSummaryTitle"),
+                 tableOutput("visibSummaryTable")
                )
              )
     ),
     
     # Fourth tab: Airport Statistics
-    tabPanel("Airport Statistics",
-             sidebarLayout(
-               sidebarPanel(
-                 sliderInput("airportStatsBins",
-                             "Number of bins:",
-                             min = 1,
-                             max = 50,
-                             value = 30)
-               ),
-               mainPanel(
-                 plotOutput("airportStatsPlot")
+      tabPanel("Airport Statistics",
+               sidebarLayout(
+                 sidebarPanel(
+                   # Text input for icaoID
+                   textInput("icaoID", "ICAO ID:", placeholder = "Enter valid icaoID"),
+                   tags$small("See Valid icaoID tab for acceptable entries"),
+                   
+                   # Button to update plot and table
+                   actionButton("updateButton", "Update")
+                 ),
+                 mainPanel(
+                   # CSS style to position the plot at the top
+                   style = "position: relative; top: 0px; height: calc(100vh - 60px);",
+                   plotOutput("airportStatsPlot", height = "400px"),  # Adjust height as needed
+                   plotOutput("airport_plot", height = "600px")  # Adjust height as needed
+                 )
                )
-             )
-    ),
+      ),
     
+
     # Fifth tab: Data Download
+    # ui.R
+    
     tabPanel("Data Download",
-             sidebarLayout(
-               sidebarPanel(
-                 downloadButton("downloadData", "Download Data")
-               ),
-               mainPanel(
-                 tableOutput("dataTable")
+             fluidPage(
+               sidebarLayout(
+                 sidebarPanel(
+                   # Input fields for API querying
+                   selectInput("endpoint", "Select Endpoint",
+                               choices = c("metar", "taf", "airport")),
+                   textInput("icaoID", "Enter ICAO ID (optional)"),
+                   numericInput("hours", "Lookback Hours", value = 24),
+                   actionButton("updateButton", "Update"),
+                   actionButton("downloadButton", "Save to file"),
+                   selectInput("fileFormat", "File Format", 
+                               choices = c(".csv" = "csv", ".xls" = "xls")),
+                   downloadButton("downloadSubsetButton", "Download Subset Data")
+                 ),
+                 mainPanel(
+                   # Display of returned data
+                   verbatimTextOutput("downloadedDataSummary"),
+                   DTOutput("downloadedDataTable"),
+                   tableOutput("first10Rows")  # Display first 10 rows here
+                 )
                )
              )
-    ),
+    )
+    ,
     
     # Sixth tab: Data Exploration
-    tabPanel("Data Exploration",
-             sidebarLayout(
-               sidebarPanel(
-                 fileInput("file1", "Choose CSV File",
-                           accept = c(
-                             "text/csv",
-                             "text/comma-separated-values,text/plain",
-                             ".csv")
+    # ui.R
+    
+    tabPanel("Data Download",
+             fluidPage(
+               sidebarLayout(
+                 sidebarPanel(
+                   # Input fields for API querying
+                   selectInput("endpoint", "Select Endpoint",
+                               choices = c("metar", "taf", "airport")),
+                   textInput("icaoID", "Enter ICAO ID (optional)"),
+                   numericInput("hours", "Lookback Hours", value = 24),
+                   actionButton("updateButton", "Update"),
+                   actionButton("downloadButton", "Save to file"),
+                   selectInput("fileFormat", "File Format", 
+                               choices = c(".csv" = "csv", ".xls" = "xls")),
+                   downloadButton("downloadSubsetButton", "Download Subset Data")
+                 ),
+                 mainPanel(
+                   # Display of returned data
+                   verbatimTextOutput("downloadedDataSummary"),
+                   DTOutput("downloadedDataTable"),
+                   tableOutput("first10Rows")  # Display first 10 rows here
                  )
-               ),
-               mainPanel(
-                 tableOutput("contents")
                )
              )
     ),
@@ -138,23 +194,56 @@ fluidPage(
       ),
       tags$a(href="https://aviationweather.gov", "Aviation Weather Center"),
       h4("Purpose of Each Tab"),
-
       tags$ul(
-        tags$li("Wind: Analyze and visualize wind speed data by state. 
-                Select a valid ICAO ID to analyze. A list of ICAO IDs can be found on the \"Valid icaoIDs\" tab. Optionally, you can leave the field blank to view all airports."),
-        tags$li("You can also set the look-back hours. If you would like to see the last 24 hours of data, type \"24\" into the hours field."),
-        tags$li("When finished, press the `update` button to display a plot showing the mean descending of the wind values by state. A table will accompany the plot, ordered by state. It is a frequency table with the headers being the wind speed groupings."),),
-        
-        tags$ul(tags$li("Visibility: Examine visibility data across different airports."),),
-
-        tags$ul(tags$li("Temperature: Explore temperature variations and trends."),),
-        tags$ul(tags$li("Airport Statistics: View various statistics related to airports."),),
-        tags$ul(tags$li("Data Download: Download aviation weather data for offline analysis."),),
-        tags$ul(tags$li("Data Exploration: Interactively explore the aviation weather dataset."),),
-        tags$ul(tags$li("Valid icaoIDs: Reference different ICAO ID codes and their associated states.")
-      ))),
+        tags$li("Wind: Analyze and visualize wind speed data by state.", 
+                "The output consists of a collection of density plots that show the distribution of wind speed observations ordered by mean descending.",
+                "The output also contains a frequency table grouped by wind speeds summed over the state and by state and ordered by state.",
+                tags$ul(
+                  tags$li("How To use:"),
+                  tags$li("Select a valid ICAO ID to analyze. A comprehensive list of icaoIDs can be found on the \"Valid icaoIDs\" tab. Optionally this field can be left blank to view all airports."),
+                  tags$li("The hours field allows you to collect the records going backward from present to however many hours you set this field to."),
+                  tags$li("When finished, press the `update` button to display a plot and table.")
+                )
+        ),
+        tags$li("Visibility: Examine visibility data across different airports."),
+        tags$li("Temperature: Explore temperature variations and trends."),
+        tags$li("Airport Statistics: View various statistics related to airports."),
+        tags$li("Data Download: Download aviation weather data for offline analysis."),
+        tags$li("Data Exploration: Interactively explore the aviation weather dataset."),
+        tags$li("Valid icaoIDs: Reference different ICAO ID codes and their associated states.",
+                tags$ul(
+                  tags$li("There are multiple icaoIDs you can use throughout this dashboard but only the following are allowed."),
+                    tags$li("@TOP - `top 39 airports in the US`"),
+                    tags$li("@TOPE - `top airports in the eastern US`"),
+                    tags$li("@TOPC - `top airports in the central US`"),
+                    tags$li("@TOPW - `top airports in the western US`"),
+                    tags$li("@USN - `major airports in the northern US region`"),
+                    tags$li("@USS - `major airports in the southern US region`"),
+                    tags$li("@USE - `major airports in the eastern US region`"),
+                    tags$li("@USW - `major airports in the western US region`"),
+                    tags$li("#US - `all airports in the US`"),
+                    tags$li("@<state_abbrev.> - `all airports by state`"),
+                    tags$li("Individual icaoIDs.  Examples include single entries: `KAPF` or multiple in the format `KAPF,KATL,KRDU`"),
+                  tags$li("The AWC website provides the different cases for what is acceptable text entries. This tab is a quick reference guide to show you what is acceptable and what the different categories capture."),
+                  tags$li("You can find more information about these categories at the website ",
+                          tags$a(href="https://aviationweather.gov/data/api/help/", "Aviation Weather Center"),
+                          " beneath the section Metar > IDs.")
+                )
+        )
+      )
+    )),
     
 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+# Eighth tab: Valid icaoIDs
     tabPanel("Valid icaoIDs",
              sidebarLayout(
                sidebarPanel(
@@ -168,8 +257,5 @@ fluidPage(
                )
              )
     ) 
-    
-    
-    
 )
 )
