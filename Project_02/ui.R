@@ -8,8 +8,9 @@
 #
 
 library(shiny)
+
 library(shinydashboard)
-library(DT)
+
 # Define UI for application that draws a histogram
 fluidPage(
   
@@ -95,82 +96,55 @@ fluidPage(
     ),
     
     # Fourth tab: Airport Statistics
-      tabPanel("Airport Statistics",
-               sidebarLayout(
-                 sidebarPanel(
-                   # Text input for icaoID
-                   textInput("icaoID", "ICAO ID:", placeholder = "Enter valid icaoID"),
-                   tags$small("See Valid icaoID tab for acceptable entries"),
-                   
-                   # Button to update plot and table
-                   actionButton("updateButton", "Update")
-                 ),
-                 mainPanel(
-                   # CSS style to position the plot at the top
-                   style = "position: relative; top: 0px; height: calc(100vh - 60px);",
-                   plotOutput("airportStatsPlot", height = "400px"),  # Adjust height as needed
-                   plotOutput("airport_plot", height = "600px")  # Adjust height as needed
-                 )
-               )
-      ),
-    
-
-    # Fifth tab: Data Download
-    # ui.R
-    
-    tabPanel("Data Download",
-             fluidPage(
-               sidebarLayout(
-                 sidebarPanel(
-                   # Input fields for API querying
-                   selectInput("endpoint", "Select Endpoint",
-                               choices = c("metar", "taf", "airport")),
-                   textInput("icaoID", "Enter ICAO ID (optional)"),
-                   numericInput("hours", "Lookback Hours", value = 24),
-                   actionButton("updateButton", "Update"),
-                   actionButton("downloadButton", "Save to file"),
-                   selectInput("fileFormat", "File Format", 
-                               choices = c(".csv" = "csv", ".xls" = "xls")),
-                   downloadButton("downloadSubsetButton", "Download Subset Data")
-                 ),
-                 mainPanel(
-                   # Display of returned data
-                   verbatimTextOutput("downloadedDataSummary"),
-                   DTOutput("downloadedDataTable"),
-                   tableOutput("first10Rows")  # Display first 10 rows here
-                 )
-               )
-             )
-    )
-    ,
-    
-    # Sixth tab: Data Exploration
-    # ui.R
-    
-    tabPanel("Data Download",
-             fluidPage(
-               sidebarLayout(
-                 sidebarPanel(
-                   # Input fields for API querying
-                   selectInput("endpoint", "Select Endpoint",
-                               choices = c("metar", "taf", "airport")),
-                   textInput("icaoID", "Enter ICAO ID (optional)"),
-                   numericInput("hours", "Lookback Hours", value = 24),
-                   actionButton("updateButton", "Update"),
-                   actionButton("downloadButton", "Save to file"),
-                   selectInput("fileFormat", "File Format", 
-                               choices = c(".csv" = "csv", ".xls" = "xls")),
-                   downloadButton("downloadSubsetButton", "Download Subset Data")
-                 ),
-                 mainPanel(
-                   # Display of returned data
-                   verbatimTextOutput("downloadedDataSummary"),
-                   DTOutput("downloadedDataTable"),
-                   tableOutput("first10Rows")  # Display first 10 rows here
-                 )
+    tabPanel("Airport Statistics",
+             sidebarLayout(
+               sidebarPanel(
+                 # Text input for icaoID
+                 textInput("icaoID", "ICAO ID:", placeholder = "Enter valid icaoID"),
+                 tags$small("See Valid icaoID tab for acceptable entries"),
+                 
+                 # Button to update plot and table
+                 actionButton("updateButton", "Update")
+               ),
+               mainPanel(
+                 # CSS style to position the plot at the top
+                 style = "position: relative; top: 0px; height: calc(100vh - 60px);",
+                 plotOutput("airportStatsPlot", height = "400px"),  # Adjust height as needed
+                 plotOutput("airport_plot", height = "600px")  # Adjust height as needed
                )
              )
     ),
+    
+    
+    # Fifth tab: Data Download
+    tabPanel("Data Download",
+             sidebarLayout(
+               sidebarPanel(
+                 downloadButton("downloadData", "Download Data")
+               ),
+               mainPanel(
+                 tableOutput("dataTable")
+               )
+             )
+    ),
+    
+    # Sixth tab: Data Exploration
+    tabPanel("Data Exploration",
+             sidebarLayout(
+               sidebarPanel(
+                 fileInput("file1", "Choose CSV File",
+                           accept = c(
+                             "text/csv",
+                             "text/comma-separated-values,text/plain",
+                             ".csv")
+                 )
+               ),
+               mainPanel(
+                 tableOutput("contents")
+               )
+             )
+    ),
+    
     
     # Seventh tab: About
     tabPanel("About", fluidPage(
@@ -213,17 +187,17 @@ fluidPage(
         tags$li("Valid icaoIDs: Reference different ICAO ID codes and their associated states.",
                 tags$ul(
                   tags$li("There are multiple icaoIDs you can use throughout this dashboard but only the following are allowed."),
-                    tags$li("@TOP - `top 39 airports in the US`"),
-                    tags$li("@TOPE - `top airports in the eastern US`"),
-                    tags$li("@TOPC - `top airports in the central US`"),
-                    tags$li("@TOPW - `top airports in the western US`"),
-                    tags$li("@USN - `major airports in the northern US region`"),
-                    tags$li("@USS - `major airports in the southern US region`"),
-                    tags$li("@USE - `major airports in the eastern US region`"),
-                    tags$li("@USW - `major airports in the western US region`"),
-                    tags$li("#US - `all airports in the US`"),
-                    tags$li("@<state_abbrev.> - `all airports by state`"),
-                    tags$li("Individual icaoIDs.  Examples include single entries: `KAPF` or multiple in the format `KAPF,KATL,KRDU`"),
+                  tags$li("@TOP - `top 39 airports in the US`"),
+                  tags$li("@TOPE - `top airports in the eastern US`"),
+                  tags$li("@TOPC - `top airports in the central US`"),
+                  tags$li("@TOPW - `top airports in the western US`"),
+                  tags$li("@USN - `major airports in the northern US region`"),
+                  tags$li("@USS - `major airports in the southern US region`"),
+                  tags$li("@USE - `major airports in the eastern US region`"),
+                  tags$li("@USW - `major airports in the western US region`"),
+                  tags$li("#US - `all airports in the US`"),
+                  tags$li("@<state_abbrev.> - `all airports by state`"),
+                  tags$li("Individual icaoIDs.  Examples include single entries: `KAPF` or multiple in the format `KAPF,KATL,KRDU`"),
                   tags$li("The AWC website provides the different cases for what is acceptable text entries. This tab is a quick reference guide to show you what is acceptable and what the different categories capture."),
                   tags$li("You can find more information about these categories at the website ",
                           tags$a(href="https://aviationweather.gov/data/api/help/", "Aviation Weather Center"),
@@ -233,7 +207,6 @@ fluidPage(
       )
     )),
     
-
     
     
     
@@ -243,7 +216,8 @@ fluidPage(
     
     
     
-# Eighth tab: Valid icaoIDs
+    
+    # Eighth tab: Valid icaoIDs
     tabPanel("Valid icaoIDs",
              sidebarLayout(
                sidebarPanel(
@@ -257,5 +231,5 @@ fluidPage(
                )
              )
     ) 
-)
+  )
 )
