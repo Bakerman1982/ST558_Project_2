@@ -1,47 +1,36 @@
-#
-# This is the server logic of a Shiny web application. You can run the
-# application by clicking 'Run App' above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    https://shiny.posit.co/
-#
 
-require(shiny)
-
-require(tidyverse)
-require(dplyr)
-require(httr)
-require(jsonlite)
-require(stringr)
-require(purrr)
-require(gapminder)
-require(shinydashboard)
-require(ggplot2)
-require(sf)
-require(rnaturalearth)
-require(rnaturalearthdata)
-require(lwgeom)
+library(shiny)
+library(tidyverse)
+library(dplyr)
+library(httr)
+library(jsonlite)
+library(stringr)
+library(purrr)
+library(gapminder)
+library(shinydashboard)
+library(ggplot2)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(lwgeom)
 library(viridis)
 library(ggridges)
 
-#optional
-#theme_set(theme_bw())
-
-## URL building function ##
-
+#Standard Shiny App server wrap
 server <- function(input, output) {
-  
-  # Define build_url function with necessary parameters
-  build_url <- function(endpoint = "metar",
-                        icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US",
-                        hours = if (!is.null(input$hours) && input$hours != "") as.numeric(input$hours) else 24,
-                        time = "valid") {
-    
-    # Base URL for API
-    base_url <- "https://aviationweather.gov/api/data/"
-    
-    # Helper vector for verifying proper use of "@" + state_abbreviations
+
+#############################
+### URL Building Function ###
+#############################
+
+    build_url <- function(base_url = "https://aviationweather.gov/api/data/",
+                    endpoint = "metar",
+                    icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US",
+                    hours = if (!is.null(input$hours) && input$hours != "") as.numeric(input$hours) else 24,
+                    time = "valid") {
+
+###BEGIN: Collection of embedded helper functions and vectors used to validate inputs
+    # Helper vector for verifying proper use of "@" + state_abbreviations formatting
     valid_states <- paste0("@", c("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
                                   "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
                                   "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
@@ -64,260 +53,272 @@ server <- function(input, output) {
       valid_icao_multiple <- grepl("^([KP][A-Z]{3}[ ,]?)+$", icaoIDs, ignore.case = TRUE)
       return(valid_state || valid_special || valid_icao_single || valid_icao_multiple)
     }
-    
+
     # Helper function to check if ICAO ID is in valid ICAO ID vectors
     check_icao_in_valid_vectors <- function(icaoID) {
       all_valid_icaoIDs <- c(valid_icaoID_1, valid_icaoID_2, valid_icaoID_3, valid_icaoID_4, valid_icaoID_5)
       return(icaoID %in% all_valid_icaoIDs)
-    }
-    
-    # Define valid endpoints
-    valid_endpoints <- c("metar", "taf", "airport")
-    
-    # Convert endpoint to lowercase for internal processing
-    endpoint_lower <- tolower(endpoint)
-    
-    # Check if the provided endpoint is valid
-    if (!(endpoint_lower %in% valid_endpoints)) {
-      stop("Invalid endpoint. Choose from: ", paste(valid_endpoints, collapse = ", "))
-    }
-    
-    # Force validation patterns for icaoIDs
-    if (!is.null(icaoIDs)) {
-      if (!(grepl("^@[A-Z]{2}$", icaoIDs, ignore.case = TRUE) ||
-            grepl("^@[A-Z]{4}$", icaoIDs, ignore.case = TRUE) ||
-            grepl("^@?(?:[A-Z]{4}[ ,]?)+$", icaoIDs, ignore.case = TRUE) ||
-            icaoIDs %in% c("@TOP", "@TOPE", "@TOPC", "@TOPW", "@USN", "@USE", "@USS", "@USW", "#US") ||
-            icaoIDs %in% paste0("@", valid_states))) {
+    } #END: Helper Section
+
+
+
+###BEGIN: Input Validation
+    #EndPoints
+      # Defined endpoints
+      valid_endpoints <- c("metar", "taf", "airport")
+      
+      # Convert endpoint to lowercase for internal processing
+      endpoint_lower <- tolower(endpoint)
+      
+      # logic to test if provided endpoint input is valid
+      if (!(endpoint_lower %in% valid_endpoints)) {
+        stop("Invalid endpoint. Choose from: ", paste(valid_endpoints, collapse = ", "))
+      }
+
+      
+    #icaoIDs        
+      # Define different pattern cases for acceptable icaoID inputs
+        if (!is.null(icaoIDs)) {
+          if (!(grepl("^@[A-Z]{2}$", icaoIDs, ignore.case = TRUE) || 
+                grepl("^@[A-Z]{4}$", icaoIDs, ignore.case = TRUE) || 
+                grepl("^@?(?:[A-Z]{4}[ ,]?)+$", icaoIDs, ignore.case = TRUE) || 
+                icaoIDs %in% c("@TOP", "@TOPE", "@TOPC", "@TOPW", "@USN", "@USE", "@USS", "@USW", "#US") || 
+                icaoIDs %in% paste0("@", valid_states))) {
         stop("Invalid icaoIDs format. Must be a two-letter state abbreviation prefixed by '@', a four-letter ICAO ID, multiple four-letter ICAO IDs separated by commas or spaces, or a special identifier (@TOP, @TOPE, @TOPC, @TOPW, @USN, @USE, @USS, @USW, #US).")
-      }
-      if (endpoint_lower == "taf" && icaoIDs == "#US") {
-        stop("icaoID = '#US' is not allowed for endpoint 'taf'.")
-      }
-    } else if (endpoint_lower %in% c("taf", "airport")) {
-      stop("icaoIDs parameter is required for endpoints 'TAF' and 'airport'.")
-    }
-    
-    # Validate hours for METAR
-    if (endpoint_lower == "metar" && !is.null(hours)) {
-      if (!(is.numeric(hours) && hours == as.integer(hours) && hours > 0)) {
-        stop("Invalid hours. Must be a positive whole number.")
-      }
-    }
-    
-    # Validate time for TAF
-    if (endpoint_lower == "taf" && !is.null(time)) {
-      if (!(time %in% c("issue", "valid"))) {
-        stop("Invalid time. Must be 'issue' or 'valid'.")
-      }
-    }
-    
-    # Create a placehold list to injest the query parameters
-    params <- list()
-    
-    # This if statement makes sure the icaoID patterns are properly held for URL building.  Different endpoints require different formatting
-    if (!is.null(icaoIDs)) {
-      if (endpoint_lower %in% c("metar", "taf", "airport")) {
-        if (icaoIDs %in% c("@TOP", "@TOPE", "@TOPC", "@TOPW", "@USN", "@USE", "@USS", "@USW") || icaoIDs %in% valid_states) {
-          params$ids <- paste0(icaoIDs)  # Keep special identifiers as-is with '@'
-        } else if (icaoIDs == "#US" && endpoint_lower != "taf") {
-          params$ids <- gsub("#", "%23",icaoIDs)  # Keep #US as-is for endpoints other than 'taf'
-        } else if (grepl("^[A-Z]{4}$", icaoIDs, ignore.case = TRUE)) {
-          params$ids <- icaoIDs
-        } else if (grepl(",", icaoIDs)) {
-          # Allow comma-separated ids
-          params$ids <- gsub(" ", "%2C", icaoIDs)
-        } else {
-          stop("Invalid icaoIDs format. Must be a two-letter state abbreviation prefixed by '@', a four-letter ICAO ID, multiple four-letter ICAO IDs separated by commas, or a special identifier (@TOP, @TOPE, @TOPC, @TOPW, @USN, @USE, @USS, @USW, #US).")
+          }
+          if (endpoint_lower == "taf" && icaoIDs == "#US") {
+            stop("icaoID = '#US' is not allowed for endpoint 'taf'.")
+          }
+          } else if (endpoint_lower %in% c("taf", "airport")) {
+            stop("icaoIDs parameter is required for endpoints 'TAF' and 'airport'.")
+          }
+
+      
+    #Hours
+      # Validate Input Hours when `metar`
+        if (endpoint_lower == "metar" && !is.null(hours)) {
+          if (!(is.numeric(hours) && hours == as.integer(hours) && hours > 0)) {
+            stop("Invalid hours. Must be a positive whole number.")
+          }
         }
-      }
-    }
-    
-    # Add specific parameters based on the endpoint
-    if (endpoint_lower == "metar" && !is.null(hours)) {
-      params$hours <- hours
-    } else if (endpoint_lower == "taf" && !is.null(time)) {
-      params$time <- time
-    }
-    
-    # Add format=json as the default parameter
-    params$format <- "json"
-    
-    # Construct the complete URL with query parameters using the parameterization formatting above.  Five cases.
-    if (endpoint_lower == "metar") {
-      if (is.null(hours)) {
-        complete_url <- paste0(base_url, "metar?", "ids=", params$ids, "&format=json")
-      } else {
-        complete_url <- paste0(base_url, "metar?", "ids=", params$ids, "&format=json", "&hours=", hours)
-      }
-    } else if (endpoint_lower == "taf") {
-      if (is.null(time)) {
-        complete_url <- paste0(base_url, "taf?", "ids=", params$ids,"&format=json")
-      } else {
-        complete_url <- paste0(base_url, "taf?", "ids=", params$ids,"&format=json", "&time=", time)
-      }
-    } else if (endpoint_lower == "airport") {
-      complete_url <- paste0(base_url, "airport?", "ids=", params$ids, "&format=json")
-    }
-    
-    # Print the complete URL.  Uncomment next line for debugging
-    #print(complete_url)
-    
-    # Fetch and parse JSON data
-    response <- httr::GET(complete_url)
-    parsed_data <- jsonlite::fromJSON(rawToChar(response$content))
-    
-    # Convert parsed data to tibble
-    parsed_tibble <- tibble::as_tibble(parsed_data)
-    
-    # Customize tibble based on the endpoint
-    if (endpoint_lower == "metar") {
-      parsed_tibble <- dplyr::select(parsed_tibble, metar_id, icaoId, obsTime, reportTime, temp, wspd, visib, name, lat, lon) |>
-        dplyr::mutate(visib = stringr::str_remove(visib, "\\+") %>% as.numeric(),
-                      state = stringr::str_extract(name, "(?<=, )\\w{2}(?=, US$)")) |>
-        dplyr::arrange(-metar_id)
-    } else if (endpoint_lower == "airport") {
-      parsed_tibble <- parsed_tibble |>
-        tidyr::unnest(runways, names_sep = "_") |>
-        dplyr::select(icaoId, state, runway_id = runways_id, runway_dimension = runways_dimension, runway_surface = runways_surface, rwyNum, rwyLength, rwyType) |>
-        tidyr::separate(runway_dimension, into = c("runway_length", "runway_width"), sep = "x", convert = TRUE)
-    }
-    
-    # Return the parsed tibble
-    return(parsed_tibble)
-  }
+
+
+    #Time          
+      # Validate Input Time when `taf`
+        if (endpoint_lower == "taf" && !is.null(time)) {
+          if (!(time %in% c("issue", "valid"))) {
+            stop("Invalid time. Must be 'issue' or 'valid'.")
+          }
+        }#END: Input Validation Section
+
+
+      
+###BEGIN: URL Contruction
+      # Create a placeholder list to ingest the query parameters
+        params <- list()
+
+
+      # This `if` statement makes sure the icaoID patterns are properly held for URL building.  Different endpoints require different URL formatting
+        if (!is.null(icaoIDs)) {
+          if (endpoint_lower %in% c("metar", "taf", "airport")) {
+            if (icaoIDs %in% c("@TOP", "@TOPE", "@TOPC", "@TOPW", "@USN", "@USE", "@USS", "@USW") || icaoIDs %in% valid_states) {
+              params$ids <- paste0(icaoIDs)  # Keep special identifiers as-is with '@'
+            } else if (icaoIDs == "#US" && endpoint_lower != "taf") {
+                params$ids <- gsub("#", "%23",icaoIDs)  # Keep #US as-is for endpoints other than 'taf'
+              } else if (grepl("^[A-Z]{4}$", icaoIDs, ignore.case = TRUE)) {
+                params$ids <- icaoIDs
+                } else if (grepl(",", icaoIDs)) {# Allow comma-separated ids
+                  params$ids <- gsub(" ", "%2C", icaoIDs)
+                  } else {
+                    stop("Invalid icaoIDs format. Must be a two-letter state abbreviation prefixed by '@', a four-letter ICAO ID, multiple four-letter ICAO IDs separated by commas, or a special identifier (@TOP, @TOPE, @TOPC, @TOPW, @USN, @USE, @USS, @USW, #US).")
+                    }
+          }
+        }
+
+
+      # Add specific parameters based on the endpoint
+        if (endpoint_lower == "metar" && !is.null(hours)) {
+          params$hours <- hours
+        } else if (endpoint_lower == "taf" && !is.null(time)) {
+            params$time <- time
+          }
+
+
+      # Add format=json as the default parameter
+        params$format <- "json"
+
+
+      # Construct the complete URL with query parameters using the parameterization formatting above.  Five cases.
+        if (endpoint_lower == "metar") {
+          if (is.null(hours)) {
+            complete_url <- paste0(base_url, "metar?", "ids=", params$ids, "&format=json")
+          } else {
+              complete_url <- paste0(base_url, "metar?", "ids=", params$ids, "&format=json", "&hours=", hours)
+            }
+        } else if (endpoint_lower == "taf") {
+          if (is.null(time)) {
+            complete_url <- paste0(base_url, "taf?", "ids=", params$ids,"&format=json")
+          } else {
+            complete_url <- paste0(base_url, "taf?", "ids=", params$ids,"&format=json", "&time=", time)
+            }
+        } else if (endpoint_lower == "airport") {
+          complete_url <- paste0(base_url, "airport?", "ids=", params$ids, "&format=json")
+          }
+
+
+      # Fetch and parse JSON data
+        response <- httr::GET(complete_url)
+        parsed_data <- jsonlite::fromJSON(rawToChar(response$content))
+
+
+      # Convert parsed data to tibble
+        parsed_tibble <- tibble::as_tibble(parsed_data)
+
+
+      # Customize tibble based on the endpoint
+        if (endpoint_lower == "metar") {
+          parsed_tibble <- dplyr::select(parsed_tibble, metar_id, icaoId, obsTime, reportTime, temp, wspd, visib, name, lat, lon) |>
+            dplyr::mutate(visib = stringr::str_remove(visib, "\\+") %>% as.numeric(),state = stringr::str_extract(name, "(?<=, )\\w{2}(?=, US$)")) |>
+            dplyr::arrange(-metar_id)
+        } else if (endpoint_lower == "airport") {
+          parsed_tibble <- parsed_tibble |>
+            tidyr::unnest(runways, names_sep = "_") |>
+            dplyr::select(icaoId, state, runway_id = runways_id, runway_dimension = runways_dimension, runway_surface = runways_surface, rwyNum, rwyLength, rwyType) |>
+            tidyr::separate(runway_dimension, into = c("runway_length", "runway_width"), sep = "x", convert = TRUE)
+          }
+
+
+      # Return the parsed tibble
+        return(parsed_tibble)
+}
+# END URL Building Function #
+
+
+
+
+################################  
+## Server Function Definition ##
+################################
   
-  
-  ################################  
-  ## Server function definition ##
-  ################################
-  
-  ##############
-  ## WIND TAB ##
-  ##############
-  
-  # Reactive expression to fetch data from the API
+# WIND TAB #
+
   # Reactive expression to fetch data from the API when updateButton is clicked
-  metar_data_reactive <- eventReactive(input$updateButton, {
-    build_url(
-      endpoint = "metar",
-      icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US",
-      hours = if (!is.null(input$hours) && input$hours != "") as.numeric(input$hours) else 24)
-  })
-  
+    metar_data_reactive <- eventReactive(input$updateButton, {
+      build_url(
+        endpoint = "metar",
+        icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US",
+        hours = if (!is.null(input$hours) && input$hours != "") as.numeric(input$hours) else 24)
+    })
+
   # Function to generate dynamic frequency table titles based on icaoID input
-  generate_table_title <- function(icaoID) {
-    # Your existing function code remains unchanged
-  }
-  
-  # Wind tab plot
-  output$windPlot <- renderPlot({
-    metar_data <- metar_data_reactive()
+    generate_table_title <- function(icaoID) {
+    }
+
     
-    # Ensure 'state' is a factor and 'wspd' is numeric
+  # Wind tab plot
+    output$windPlot <- renderPlot({
+    metar_data <- metar_data_reactive()
+  
+    
+  # Ensure 'state' is a factor and 'wspd' is numeric
     metar_data$state <- as.factor(metar_data$state)
     metar_data$wspd <- as.numeric(metar_data$wspd)
+  
     
-    # Filter out rows with NA in the 'state' column
+  # Filter out rows with NA in the 'state' column
     metar_data <- metar_data %>% filter(!is.na(state))
+  
     
-    # Calculate mean wind speed for each state and order descending
+  # Calculate mean wind speed for each state and order descending
     mean_wspd <- metar_data %>%
       group_by(state) %>%
       summarize(mean_wspd = mean(wspd, na.rm = TRUE)) %>%
       arrange(mean_wspd)
+  
     
-    # Reorder 'state' factor levels by mean wind speed in descending order
+  # Reorder 'state' factor levels by mean wind speed in descending order
     metar_data$state <- factor(metar_data$state, levels = mean_wspd$state)
-    
-    # Generate the density ridges plot
+  
+  # Generate the density ridges plot
     ggplot(metar_data, aes(x = wspd, y = state, fill = after_stat(x), group = state)) +
       geom_density_ridges_gradient(scale = 3, rel_min_height = 0.01, xlim = c(0, 50)) +
       scale_fill_viridis_c(name = "Wind Speed", option = "C") +
       labs(title = 'Wind Speed by State') +
       scale_fill_viridis(direction = -1) + theme_minimal()
-  })  
+    })  
   
   
   # Render the table title
-  output$windTableTitle <- renderUI({
-    req(input$icaoID)
-    h4(generate_table_title(input$icaoID))
-  })
+    output$windTableTitle <- renderUI({
+      req(input$icaoID)
+      h4(generate_table_title(input$icaoID))
+    })
   
   # Reactive expression for updating the table when updateButton is clicked
-  windTableData <- eventReactive(input$updateButton, {
-    metar_data <- metar_data_reactive()
-    
-    # Create wind speed ranges
-    metar_data <- metar_data %>%
-      mutate(wspd_ranges = cut(wspd, breaks = c(0, 5, 10, 15, Inf), labels = c("0-5", "6-10", "11-15", ">15")))
-    
-    # Create contingency table
-    state_vs_wspd <- table(metar_data$state, metar_data$wspd_ranges)
-    
-    # Convert the contingency table to a data frame
-    state_vs_wspd_df <- as.data.frame.matrix(state_vs_wspd)
-    
-    # Add a state column
-    state_vs_wspd_df$State <- rownames(state_vs_wspd_df)
-    rownames(state_vs_wspd_df) <- NULL
-    
-    # Reorder columns to place state at the front
-    state_vs_wspd_df <- state_vs_wspd_df[, c(ncol(state_vs_wspd_df), 1:(ncol(state_vs_wspd_df) - 1))]
-    
-    state_vs_wspd_df
-  })
+    windTableData <- eventReactive(input$updateButton, {
+      metar_data <- metar_data_reactive()
+      # Create wind speed ranges
+        metar_data <- metar_data %>%
+          mutate(wspd_ranges = cut(wspd, breaks = c(0, 5, 10, 15, Inf), labels = c("0-5", "6-10", "11-15", ">15")))
+      # Create contingency table
+        state_vs_wspd <- table(metar_data$state, metar_data$wspd_ranges)
+      # Convert the contingency table to a data frame
+        state_vs_wspd_df <- as.data.frame.matrix(state_vs_wspd)
+      # Add a state column
+        state_vs_wspd_df$State <- rownames(state_vs_wspd_df)
+        rownames(state_vs_wspd_df) <- NULL
+      # Reorder columns to place state at the front
+        state_vs_wspd_df <- state_vs_wspd_df[, c(ncol(state_vs_wspd_df), 1:(ncol(state_vs_wspd_df) - 1))]
+          state_vs_wspd_df
+    })
   
   # Render the table when updateButton is clicked
-  output$windTable <- renderTable({
-    windTableData()
-  })
+    output$windTable <- renderTable({
+      windTableData()
+    })
   
   # Event handler for the update button
-  observeEvent(input$updateButton, {
-    # Any specific reactive updates or actions can be added here
-  })
-  
-  
-  
-  ##############
-  ## TEMP TAB ##
-  ##############
-  
+    observeEvent(input$updateButton, {
+    })
+
+
+
+# TEMP TAB #
+
   # Reactive expression to fetch data from the API when updateButton is clicked
-  metar_data_reactive <- eventReactive(input$updateButton, {
-    build_url(
-      endpoint = "metar",
-      icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US",
-      hours = if (!is.null(input$hours) && input$hours != "") as.numeric(input$hours) else 24)
-  })
-  
+    metar_data_reactive <- eventReactive(input$updateButton, {
+      build_url(
+        endpoint = "metar",
+        icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US",
+        hours = if (!is.null(input$hours) && input$hours != "") as.numeric(input$hours) else 24)
+    })
+
+
   # Reactive expression to process temperature data from the fetched metar data
-  temp_data_reactive <- eventReactive(input$updateButton, {
-    metar_data <- metar_data_reactive()
-    
-    # Example data processing step (adjust according to your actual data structure)
-    # Assuming metar_data contains columns: state, temp
-    
+    temp_data_reactive <- eventReactive(input$updateButton, {
+      metar_data <- metar_data_reactive()
+
+
+  # Create a tibble to use with plotting a barchart.  
     temp_data <- metar_data %>%
       filter(!is.na(temp)) %>%
       group_by(state) %>%
       summarise(max_temp = max(temp, na.rm = TRUE),
-                min_temp = min(temp, na.rm = TRUE),
-                temp_range = max_temp - min_temp) %>%
+      min_temp = min(temp, na.rm = TRUE),
+      temp_range = max_temp - min_temp) %>%
       pivot_longer(cols = c(max_temp, min_temp), 
-                   names_to = "temperature_type", 
-                   values_to = "temperature")
-    
+      names_to = "temperature_type", 
+      values_to = "temperature")
     temp_data
-  })
-  
+    })
+
+
   # Render the temperature bar chart
-  output$tempBarChart <- renderPlot({
-    temp_data <- temp_data_reactive()
-    
-    # Example plot: Bar chart for max and min temperatures
+    output$tempBarChart <- renderPlot({
+      temp_data <- temp_data_reactive()
+
+
+  # Plot: Bar chart for max and min temperatures
     if (!is.null(temp_data) && nrow(temp_data) > 0) {
       ggplot(temp_data, aes(x = state, y = temperature, fill = temperature_type)) +
         geom_bar(stat = "identity", position = "dodge") +
@@ -326,222 +327,213 @@ server <- function(input, output) {
         theme(axis.text.x = element_text(angle = 45, hjust = 1))
     } else {
       ggplot() + theme_minimal() + labs(title = "No data available")
-    }
-  })
-  
+      }
+    })
+
+
   # Render the summary table
-  output$tempSummaryTable <- renderTable({
-    temp_data <- temp_data_reactive()
-    
+    output$tempSummaryTable <- renderTable({
+      temp_data <- temp_data_reactive()
+
     if (!is.null(temp_data) && nrow(temp_data) > 0) {
       summary_table <- temp_data %>%
-        group_by(state) %>%
-        summarise(temp_min = min(temperature[temperature_type == "min_temp"], na.rm = TRUE),
-                  temp_max = max(temperature[temperature_type == "max_temp"], na.rm = TRUE),
-                  temp_range = temp_max - temp_min)
-      
+      group_by(state) %>%
+      summarise(temp_min = min(temperature[temperature_type == "min_temp"], na.rm = TRUE),
+      temp_max = max(temperature[temperature_type == "max_temp"], na.rm = TRUE),
+      temp_range = temp_max - temp_min)
       summary_table
     } else {
       NULL
-    }
-  })
-  
+      }
+    })
+
+    
   # UI part for summary table
-  output$tempSummaryTitle <- renderUI({
-    if (!is.null(temp_data_reactive()) && nrow(temp_data_reactive()) > 0) {
+    output$tempSummaryTitle <- renderUI({
+      if (!is.null(temp_data_reactive()) && nrow(temp_data_reactive()) > 0) {
       h4("Temperature Summary by State")
-    }
-  })
-  
-  
-  
-  ####################
-  ## VISIBILITY TAB ##
-  ####################
+      }
+    })
+
+
+
+# VISIBILITY TAB #
+
   
   # Reactive expression to fetch data from the API when updateButton is clicked
-  metar_data_reactive_visib <- eventReactive(input$updateButton_visib, {
-    build_url(
-      endpoint = "metar",
-      icaoIDs = if (!is.null(input$icaoID_visib) && input$icaoID_visib != "") input$icaoID_visib else "#US",
-      hours = if (!is.null(input$hours_visib) && input$hours_visib != "") as.numeric(input$hours_visib) else 24)
-  })
-  
+    metar_data_reactive_visib <- eventReactive(input$updateButton_visib, {
+      build_url(
+        endpoint = "metar",
+        icaoIDs = if (!is.null(input$icaoID_visib) && input$icaoID_visib != "") input$icaoID_visib else "#US",
+        hours = if (!is.null(input$hours_visib) && input$hours_visib != "") as.numeric(input$hours_visib) else 24)
+    })
+
+
   # Reactive expression to process visibility data from the fetched metar data
-  visib_data_reactive <- eventReactive(input$updateButton_visib, {
-    metar_data <- metar_data_reactive_visib()
-    
+    visib_data_reactive <- eventReactive(input$updateButton_visib, {
+      metar_data <- metar_data_reactive_visib()
+
+
     # Filter out rows with missing visib values
-    visib_data <- metar_data %>%
-      filter(!is.na(visib)) %>%
-      group_by(state) %>%
-      summarise(visib_min = min(visib, na.rm = TRUE),
-                visib_max = max(visib, na.rm = TRUE),
-                visib_range = visib_max - visib_min)
-    
-    visib_data
-  })
-  
+      visib_data <- metar_data %>%
+        filter(!is.na(visib)) %>%
+        group_by(state) %>%
+        summarise(visib_min = min(visib, na.rm = TRUE),
+                  visib_max = max(visib, na.rm = TRUE),
+                  visib_range = visib_max - visib_min)
+      
+      visib_data
+      })
+
+
   # Render the visibility heatmap
-  output$visibHeatmap <- renderPlot({
-    visib_data <- visib_data_reactive()
-    
+    output$visibHeatmap <- renderPlot({
+      visib_data <- visib_data_reactive()
+
+
     # Example plot: Heatmap for average visibility by state
-    if (!is.null(visib_data) && nrow(visib_data) > 0) {
-      ggplot(visib_data, aes(x = state, y = 1, fill = visib_min)) +
-        geom_tile() +
-        scale_fill_gradient(low = "blue", high = "red", name = "Minimum Visibility") +
-        labs(x = "State", y = "", title = "Minimum Visibility by State") +
-        theme_minimal() +
-        theme(axis.text.y = element_blank(),
-              axis.ticks.y = element_blank(),
-              axis.title.y = element_blank())
-    } else {
-      ggplot() + theme_minimal() + labs(title = "No data available")
-    }
-  })
+      if (!is.null(visib_data) && nrow(visib_data) > 0) {
+        ggplot(visib_data, aes(x = state, y = 1, fill = visib_min)) +
+          geom_tile() +
+          scale_fill_gradient(low = "blue", high = "red", name = "Minimum Visibility") +
+          labs(x = "State", y = "", title = "Minimum Visibility by State") +
+          theme_minimal() +
+          theme(axis.text.y = element_blank(),
+                axis.ticks.y = element_blank(),
+                axis.title.y = element_blank())
+      } else {
+        ggplot() + theme_minimal() + labs(title = "No data available")
+        }
+    })
   
-  # Render the summary table
-  output$visibSummaryTable <- renderTable({
-    visib_data <- visib_data_reactive()
     
-    if (!is.null(visib_data) && nrow(visib_data) > 0) {
-      visib_data %>%
-        select(state, visib_min, visib_max, visib_range)
-    } else {
-      NULL
-    }
-  })
+  # Render the summary table
+    output$visibSummaryTable <- renderTable({
+      visib_data <- visib_data_reactive()
+      if (!is.null(visib_data) && nrow(visib_data) > 0) {
+        visib_data %>%
+          select(state, visib_min, visib_max, visib_range)
+      } else {
+        NULL
+      }
+    })
   
   # UI part for summary table
-  output$visibSummaryTitle <- renderUI({
-    if (!is.null(visib_data_reactive()) && nrow(visib_data_reactive()) > 0) {
-      h4("Visibility Summary by State")
-    }
-  })
-  
-  
-  
-  ########################
-  ## AIRPORT STATISTICS ##
-  ########################
-  
-  # server.R
-  
+    output$visibSummaryTitle <- renderUI({
+      if (!is.null(visib_data_reactive()) && nrow(visib_data_reactive()) > 0) {
+        h4("Visibility Summary by State")
+      }
+    })
+
+
+
+# AIRPORT STATISTICS #
+
+    
   # Reactive expression to fetch data from the API when updateButton is clicked
-  airport_data_reactive <- eventReactive(input$updateButton, {
-    build_url(
-      endpoint = "airport",
-      icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US"
-    )
-  })
-  
-  # Render the plot using ggplot in a reactive environment
-  output$airport_plot <- renderPlot({
-    data <- airport_data_reactive()
-    
-    # Ensure runway_length and runway_width are numeric
-    data$runway_length <- as.numeric(data$runway_length)
-    data$runway_width <- as.numeric(data$runway_width)
-    
-    # Convert rwyType to factor if needed
-    data$rwyType <- factor(data$rwyType, levels = c("S", "M", "L"))
-    
-    # Plotting using ggplot with a horizontal violin plot
-    ggplot(data, aes(y = runway_length, x = runway_width, fill = rwyType)) +
-      geom_violin(scale = "width", draw_quantiles = c(0.25, 0.5, 0.75)) +
-      scale_fill_manual(values = c("S" = "#66c2a5", "M" = "#fc8d62", "L" = "#8da0cb")) +
-      guides(color = FALSE) +
-      theme_minimal() +
-      theme(
-        # Adjust plot dimensions if needed
-        plot.background = element_rect(fill = "white"),
-        plot.margin = margin(10, 10, 10, 10, "pt")
-      ) +
-      labs(
-        x = "Runway Width",
-        y = "Runway Length",
-        fill = "Runway Type",
-        title = "Airport Runway Statistics",
-        subtitle = "Distribution of runway lengths and widths by type"
+    airport_data_reactive <- eventReactive(input$updateButton, {
+      build_url(
+        endpoint = "airport",
+        icaoIDs = if (!is.null(input$icaoID) && input$icaoID != "") input$icaoID else "#US"
       )
-  })
+    })
+  
+
+  # Render the plot using ggplot in a reactive environment
+    output$airport_plot <- renderPlot({
+      data <- airport_data_reactive()
+    # Ensure runway_length and runway_width are numeric
+      data$runway_length <- as.numeric(data$runway_length)
+      data$runway_width <- as.numeric(data$runway_width)
+    # Convert rwyType to factor if needed
+      data$rwyType <- factor(data$rwyType, levels = c("S", "M", "L"))
+    # Plotting using ggplot with a horizontal violin plot
+      ggplot(data, aes(y = runway_length, x = runway_width, fill = rwyType)) +
+        geom_violin(scale = "width", draw_quantiles = c(0.25, 0.5, 0.75)) +
+        scale_fill_manual(values = c("S" = "#66c2a5", "M" = "#fc8d62", "L" = "#8da0cb")) +
+        guides(color = FALSE) +
+        theme_minimal() +
+        theme(
+          plot.background = element_rect(fill = "white"),
+          plot.margin = margin(10, 10, 10, 10, "pt")) +
+        labs(
+          x = "Runway Width",
+          y = "Runway Length",
+          fill = "Runway Type",
+          title = "Airport Runway Statistics",
+          subtitle = "Distribution of runway lengths and widths by type")
+    })
   
   
   
-  ###################
-  ## DATA DOWNLOAD ##
-  ###################
-  
-  ######################
-  ## DATA EXPLORATION ##
-  ######################
-  
-  
-  ################
-  ## icoaID TAB ##
-  ###########$$###
-  
+
+# DATA DOWNLOAD #
+
+# DATA EXPLORATION #
+
+
+
+# icoaID TAB #
+
+
   # Category descriptions
-  descriptions <- list(
-    "@TOP" = "Top 39 airports in the US",
-    "@TOPE" = "Top airports in the eastern US",
-    "@TOPC" = "Top airports in the central US",
-    "@TOPW" = "Top airports in the western US",
-    "@USN" = "Major airports in the northern US region",
-    "@USS" = "Major airports in the southern US region",
-    "@USE" = "Major airports in the eastern US region",
-    "@USW" = "Major airports in the western US region",
-    "#US" = "All airports in the US",
-    "<state>" = "All airports by state"
-  )
-  
+    descriptions <- list(
+      "@TOP" = "Top 39 airports in the US",
+      "@TOPE" = "Top airports in the eastern US",
+      "@TOPC" = "Top airports in the central US",
+      "@TOPW" = "Top airports in the western US",
+      "@USN" = "Major airports in the northern US region",
+      "@USS" = "Major airports in the southern US region",
+      "@USE" = "Major airports in the eastern US region",
+      "@USW" = "Major airports in the western US region",
+      "#US" = "All airports in the US",
+      "<state>" = "All airports by state"
+    )
+
+
   # Render category description
-  output$category_description <- renderText({
-    descriptions[[input$icao_category]]
-  })
-  
+    output$category_description <- renderText({
+      descriptions[[input$icao_category]]
+    })
+
+
   # Generate state dropdown if <state> is selected
-  output$state_dropdown <- renderUI({
-    if (input$icao_category == "<state>") {
-      selectInput("state", "Select State", choices = state.abb)
-    }
-  })
-  
+    output$state_dropdown <- renderUI({
+      if (input$icao_category == "<state>") {
+        selectInput("state", "Select State", choices = state.abb)
+      }
+    })
+
+
   # Filter and display the table based on the selection
-  output$icao_table <- renderTable({
-    if (input$icao_category %in% c("@TOP", "@TOPE", "@TOPC", "@TOPW", "@USN", "@USE", "@USS", "@USW")) {
-      metar_loc <- build_url(endpoint = "metar",
-                             icaoIDs = input$icao_category,
-                             hours = 96)
-      
-      metar_loc <- metar_loc %>%
-        select(icaoId, name, state) %>%
-        group_by(state) %>%
-        arrange(state) %>%
-        mutate(name = str_remove(name, ",.*")) %>%
-        distinct(name, .keep_all = TRUE)
-      
-    } else if (input$icao_category == "<state>") {
-      req(input$state)
-      metar_loc <- build_url(endpoint = "metar",
-                             icaoIDs = paste0("@", input$state),
-                             hours = 96)
-      
-      metar_loc <- metar_loc %>%
-        select(icaoId, name, state) %>%
-        group_by(state) %>%
-        arrange(name) %>%  # Changed to arrange by name
-        mutate(name = str_remove(name, ",.*")) %>%
-        distinct(name, .keep_all = TRUE)
-      
-    } else {
-      return(NULL)  # For #US, do nothing
-    }
-    
-    metar_loc
-  })
-  
-} #end curly brace.  dont delete it. 
-
-
+    output$icao_table <- renderTable({
+      if (input$icao_category %in% c("@TOP", "@TOPE", "@TOPC", "@TOPW", "@USN", "@USE", "@USS", "@USW")) {
+        metar_loc <- build_url(endpoint = "metar",
+                               icaoIDs = input$icao_category,
+                               hours = 96)
+        
+        metar_loc <- metar_loc %>%
+          select(icaoId, name, state) %>%
+          group_by(state) %>%
+          arrange(state,name) %>%
+          mutate(name = str_remove(name, ",.*")) %>%
+          distinct(name, .keep_all = TRUE)
+        
+      } else if (input$icao_category == "<state>") {
+          req(input$state)
+          metar_loc <- build_url(endpoint = "metar",
+                                 icaoIDs = paste0("@", input$state),
+                                 hours = 96)
+          
+          metar_loc <- metar_loc %>%
+            select(icaoId, name, state) %>%
+            group_by(state) %>%
+            arrange(name) %>%  # Changed to arrange by name
+            mutate(name = str_remove(name, ",.*")) %>%
+            distinct(name, .keep_all = TRUE)
+        } else {
+          return(NULL)  # For #US, do nothing
+          }
+      metar_loc
+    })
+}
