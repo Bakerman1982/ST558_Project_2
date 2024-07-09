@@ -96,9 +96,9 @@ fluidPage(
           actionButton("updateButton", "Update")
         ),
         mainPanel(
-          style = "position: relative; top: 0px; height: calc(100vh - 60px);",
-          plotOutput("airportStatsPlot", height = "400px"),  # Adjust height as needed
-          plotOutput("airport_plot", height = "600px")  # Adjust height as needed
+          #style = "position: relative; top: 0px; height: calc(100vh - 60px);",
+          
+          plotOutput("airport_plot", width = "900px", height = "600")  # Adjust height as needed
         )
       )
   ),
@@ -106,18 +106,18 @@ fluidPage(
 
 
   tabPanel("Data Download",
-       sidebarLayout(
-         sidebarPanel(
-           selectInput("endpoint_dd", "Select Endpoint:",
-                       choices = c("metar", "taf", "airport")),
-           selectInput("format_dd", "Select Format:",
-                       choices = c(".csv", ".xls")),
-           actionButton("downloadButton", "Download Data")
-         ),
-         mainPanel(
-           tableOutput("dataTableDownload")
-         )
-       )
+           sidebarLayout(
+             sidebarPanel(
+               selectInput("endpoint_dd", "Select Endpoint:",
+                           choices = c("metar", "taf", "airport")),
+               selectInput("format_dd", "Select Format:",
+                           choices = c(".csv", ".xls")),
+               downloadButton("downloadData", "Download Data")
+             ),
+             mainPanel(
+               tableOutput("dataTableDownload")
+             )
+           )
   ),
 
 
@@ -243,18 +243,3 @@ fluidPage(
 
   ) #NAVBAR_brace
 ) #FLUIDPAGE_brace
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
