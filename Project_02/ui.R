@@ -20,7 +20,7 @@ library(ggridges)
 fluidPage(
   
   # Application title
-  titlePanel("Aviation Weather Dashboard"),
+  titlePanel("Airport Weather Dashboard"),
   
     # Navigation bar with seven tabs
     navbarPage(
@@ -136,29 +136,85 @@ fluidPage(
 
 
 
-  tabPanel("About", fluidPage(
+  tabPanel(
+    "About",
+    fluidPage(
+      titlePanel("About this app"),
       fluidRow(
-        column(width = 6,
-               img(src = "NOAA_Logo.png", height = "200px", width = "200px")
+        column(width = 4,
+               img(src = "NOAA_Logo.png", height = "100px", width = "100px")
         ),
-        column(width = 6,
-               img(src = "NWS_Logo.png", height = "200px", width = "200px")
+        column(width = 4,
+               img(src = "NWS_Logo.png", height = "100px", width = "100px")
+        ),
+        column(width = 4,
+               img(src = "AWC.jfif", height = "100px", width = "100px")
         )
       ),
-
-      h3("About This App"))),
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+      fluidRow(
+        column(
+          width = 12,
+          p("The purpose of this app is to provide a national and regional view of the airport wind, temperature, visibility weather statistics through interactive tabs. There is also a tab that shows at a regional level the various lengths and widths of airport runways."),
+          br(),
+          p("The data used in this app is sourced from three API endpoints found at the Aviation Weather Center (AWC). The AWC is a component of the Federal Department of Commerce’ National Weather Service Agency (NWS) and the National Oceanic and Atmospheric Administration (NOAA)."),
+          tags$ul(
+            tags$li("METAR – Meteorological Aerodrome Report. This API reports current weather conditions and retains a log of recent weather."),
+            tags$li("TAF – Terminal Area Forecast. This API reports future forecast weather conditions. This API does not keep record of historical forecasts made."),
+            tags$li("AIRPORT – This API contains general airport statistics; runway length, width, surface type, elevation, global positioning, orientation to true and magnetic north, etc.")
+          ),
+          p("Reference: ", a(href="https://aviationweather.gov", "Aviation Weather Center")),
+          br(),
+          h3("Purpose of Tabs"),
+          p("Each tab accepts reactive inputs that you can manipulate to contextualize the data you are viewing. How to use each of the interactive tabs:"),
+          tags$ol(
+            tags$li("Every tab has an icaoID field. You can optionally leave this blank to capture a national snapshot or you can enter any one of the valid icaoIDs found on that namesakes tab."),
+            tags$li("There is also a second text field that states hours. This allows you to look back in the METAR report for however long you set it.")
+          ),
+          h4("Wind: visualize and summarize wind speed data by icaoID category."),
+          tags$ul(
+            tags$li("The output consists of a collection of density plots that show the distribution of wind speed observations ordered by mean descending. The icaoID selected will determine what is produced."),
+            tags$li("There should also be a frequency table grouped by wind speed increments summed over the state and by state and ordered by state.")
+          ),
+          h4("Temperature: Explore temperature variations and trends."),
+          tags$ul(
+            tags$li("A vertical bar chart showing the min and max temperature observations by icaoID category."),
+            tags$li("Will be accompanied by a summary table of the min, max and range ordered by state.")
+          ),
+          h4("Visibility: Examine visibility data across different airports."),
+          tags$ul(
+            tags$li("I tried implementing a heat map to show the different visibility min/max by icaoID category."),
+            tags$li("The summary table will display min/max and a range ordered by state.")
+          ),
+          h4("Airport Statistics: View various statistics related to airports."),
+          tags$ul(
+            tags$li("This tab provides a graphical summary of runway length/width. I chose a vertical violin plot because it visually captures the width and length of runways if the plot is set to be proportional to each other. In keeping with aeronautical themes, the violin plot often produces a silhouette in the shape of an airplane.")
+          ),
+          h4("Data Download"),
+          h4("Data Exploration"),
+          h4("Valid icaoIDs: Reference different ICAO ID codes and their associated states."),
+          p("There are multiple icaoIDs you can use throughout this dashboard but only the following are allowed."),
+          p("@TOP - `top 39 airports in the US`"),
+          p("@TOPE - `top airports in the eastern US`"),
+          p("@TOPC - `top airports in the central US`"),
+          p("@TOPW - `top airports in the western US`"),
+          p("@USN - `major airports in the northern US region`"),
+          p("@USS - `major airports in the southern US region`"),
+          p("@USE - `major airports in the eastern US region`"),
+          p("@USW - `major airports in the western US region`"),
+          p("#US - `all airports in the US`"),
+          p("@<state_abbrev.> - `all airports by state`"),
+          p("In addition to all of the above icaoIDs allow, you can also add single or multiple concatenated icaoIDs of the airport codes from any of the lists displayed."),
+          p("Example 1. If you wanted to look at Naples, FL airport, you can simply enter KAPF into the field."),
+          p("Example 2. If you wanted to look at Naples, FL, Atlanta, GA, and Raleigh, NC, you can enter comma separated values like this: KAPF,KATL,KRDU."),
+          p("Do not enter spaces anywhere inside the concatenation of the app will throw an error."),
+          p("The AWC website provides a comprehensive list of the different cases for acceptable text entries. This tab is a quick reference guide to show you what is acceptable and what the different categories capture. You can find more information about these icaoIDs at ", a(href="https://aviationweather.gov/data/api/help/", "https://aviationweather.gov/data/api/help/"), " beneath the section METAR > IDs.")
+        )
+      )
+    )
+  ),
+  
+  
+  
   tabPanel("Valid icaoIDs",
     sidebarLayout(
       sidebarPanel(
@@ -174,9 +230,9 @@ fluidPage(
   ) 
 
     
-  ) #NAVBAR
+  ) #NAVBAR_brace
   
-) #FLUIDPAGE
+) #FLUIDPAGE_brace
 
 
 
@@ -188,68 +244,6 @@ fluidPage(
 
 
 
-
-
-
-
-
-
-###BELOW NEEDS TO BE FORMATTED AND ADDED TO ABOUT PAGE. 
-,
-p("The purpose of this app is to provide comprehensive aviation weather data analysis and visualization. It is designed to help users explore various aspects of aviation weather through interactive and informative tabs."),
-h4("Data Source"),
-p("The data used in this app is sourced from various aviation weather APIs endpoints from the Aviation Weather Center by NOAA. These endpoints include:"),
-tags$ul(
-  tags$li("metar - Metoerological Aerodrome Report. This report contains current weather conditions and a log of conditions."),
-  tags$li("taf - Terminal Area Forecast. This report is a forecast of the weather conditions."),
-  tags$li("airport - Airport statistics. This report contains general statistics about an airport; including surface type, runway length etc.")
-),
-
-tags$a(href="https://aviationweather.gov", "Aviation Weather Center"),
-
-h4("Purpose of Each Tab"),
-tags$ul(
-  h5("Wind: Analyze and visualize wind speed data by state."), 
-  tags$ul(
-    tags$li("The output consists of a collection of density plots that show the distribution of wind speed observations ordered by mean descending."),
-    tags$li("The output also contains a frequency table grouped by wind speeds summed over the state and by state and ordered by state."),
-    tags$li("How To use:"),
-    tags$li("Select a valid ICAO ID to analyze. A comprehensive list of icaoIDs can be found on the \"Valid icaoIDs\" tab. Optionally this field can be left blank to view all airports."),
-    tags$li("The hours field allows you to collect the records going backward from present to however many hours you set this field to."),
-    tags$li("When finished, press the `update` button to display a plot and table.")
-  ),
-),
-
-
-
-
-h5("Visibility: Examine visibility data across different airports."),
-h5("Temperature: Explore temperature variations and trends."),
-h5("Airport Statistics: View various statistics related to airports."),
-h5("Data Download: Download aviation weather data for offline analysis."),
-h5("Data Exploration: Interactively explore the aviation weather dataset."),
-h5("Valid icaoIDs: Reference different ICAO ID codes and their associated states.",
-   tags$ul(
-     tags$li("There are multiple icaoIDs you can use throughout this dashboard but only the following are allowed."),
-     tags$li("@TOP - `top 39 airports in the US`"),
-     tags$li("@TOPE - `top airports in the eastern US`"),
-     tags$li("@TOPC - `top airports in the central US`"),
-     tags$li("@TOPW - `top airports in the western US`"),
-     tags$li("@USN - `major airports in the northern US region`"),
-     tags$li("@USS - `major airports in the southern US region`"),
-     tags$li("@USE - `major airports in the eastern US region`"),
-     tags$li("@USW - `major airports in the western US region`"),
-     tags$li("#US - `all airports in the US`"),
-     tags$li("@<state_abbrev.> - `all airports by state`"),
-     tags$li("Individual icaoIDs.  Examples include single entries: `KAPF` or multiple in the format `KAPF,KATL,KRDU`"),
-     tags$li("The AWC website provides the different cases for what is acceptable text entries. This tab is a quick reference guide to show you what is acceptable and what the different categories capture."),
-     tags$li("You can find more information about these categories at the website ",
-             tags$a(href="https://aviationweather.gov/data/api/help/", "Aviation Weather Center"),
-             " beneath the section Metar > IDs.")
-   )
-)
-)
-))
 
 
 

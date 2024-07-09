@@ -84,7 +84,7 @@ server <- function(input, output) {
                 grepl("^@?(?:[A-Z]{4}[ ,]?)+$", icaoIDs, ignore.case = TRUE) || 
                 icaoIDs %in% c("@TOP", "@TOPE", "@TOPC", "@TOPW", "@USN", "@USE", "@USS", "@USW", "#US") || 
                 icaoIDs %in% paste0("@", valid_states))) {
-        stop("Invalid icaoIDs format. Must be a two-letter state abbreviation prefixed by '@', a four-letter ICAO ID, multiple four-letter ICAO IDs separated by commas or spaces, or a special identifier (@TOP, @TOPE, @TOPC, @TOPW, @USN, @USE, @USS, @USW, #US).")
+        stop("Invalid icaoIDs format. Must be a capitalized two-letter state abbreviation prefixed by '@', a four-letter ICAO ID, multiple four-letter ICAO IDs separated by commas or spaces, or a special identifier (@TOP, @TOPE, @TOPC, @TOPW, @USN, @USE, @USS, @USW, #US).  See `Valid icaoIDs` tab for acceptable variants.")
           }
           if (endpoint_lower == "taf" && icaoIDs == "#US") {
             stop("icaoID = '#US' is not allowed for endpoint 'taf'.")
@@ -130,7 +130,7 @@ server <- function(input, output) {
                 } else if (grepl(",", icaoIDs)) {# Allow comma-separated ids
                   params$ids <- gsub(" ", "%2C", icaoIDs)
                   } else {
-                    stop("Invalid icaoIDs format. Must be a two-letter state abbreviation prefixed by '@', a four-letter ICAO ID, multiple four-letter ICAO IDs separated by commas, or a special identifier (@TOP, @TOPE, @TOPC, @TOPW, @USN, @USE, @USS, @USW, #US).")
+                    stop("Invalid icaoIDs format. Must be a capitalized two-letter state abbreviation prefixed by '@', a four-letter ICAO ID, multiple four-letter ICAO IDs separated by commas, or a special identifier (@TOP, @TOPE, @TOPC, @TOPW, @USN, @USE, @USS, @USW, #US).  See `Valid icaoIDs` tab for acceptable variants.")
                     }
           }
         }
