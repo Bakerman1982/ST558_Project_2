@@ -15,6 +15,7 @@ library(rnaturalearthdata)
 library(lwgeom)
 library(viridis)
 library(ggridges)
+library(writexl)
 
 #Standard Shiny App server wrap
 server <- function(input, output) {
@@ -466,10 +467,206 @@ server <- function(input, output) {
   
   
   
-
 # DATA DOWNLOAD #
 
+    
+    #Creates the table that is shown on the data download tab.  Gives visual of what data looks like before downloading.    
+      output$dataTableDownload <- renderTable({
+        endpoint <- input$endpoint_dd
+        icaoIDs <- "#US"
+        hours <- 96
+        time <- "issue"
+      
+        #Special consideration and work around for `taf` endpoint.  Combines data from different regions into one tibble.  
+        if (endpoint == "taf") {
+          tafNorth <- build_url(endpoint = "taf", icaoIDs = "@USN", time = "issue")
+          tafEast <- build_url(endpoint = "taf", icaoIDs = "@USE", time = "issue")
+          tafSouth <- build_url(endpoint = "taf", icaoIDs = "@USS", time = "issue")
+          tafWest <- build_url(endpoint = "taf", icaoIDs = "@USW", time = "issue")
+          tafALL <- bind_rows(tafNorth, tafEast, tafSouth, tafWest)
+          
+          # Limit to the first 3 rows for display and removes the column fcsts--a list that is throwing an error upon rendering. 
+          tafALL <- head(tafALL, 3)
+          tafALL <- tafALL |>
+            select(-fcsts)
+          tafALL
+        } else {
+        #For other endpoints (metar, airport), fetch data using build_url
+          data <- build_url(endpoint = endpoint,
+                            icaoIDs = icaoIDs,
+                            hours = hours,
+                            time = time)
+          data <- head(data, 25)
+          data
+          }
+      })
+
+      # Reactive expression for data table display
+      dataToDisplay <- reactive({
+        endpoint <- input$endpoint_dd
+        icaoIDs <- "#US"
+        hours <- 96
+        time <- "issue"
+        
+        # Special consideration and work around for `taf` endpoint
+        if (endpoint == "taf") {
+          tafNorth <- build_url(endpoint = "taf", icaoIDs = "@USN", time = "issue")
+          tafEast <- build_url(endpoint = "taf", icaoIDs = "@USE", time = "issue")
+          tafSouth <- build_url(endpoint = "taf", icaoIDs = "@USS", time = "issue")
+          tafWest <- build_url(endpoint = "taf", icaoIDs = "@USW", time = "issue")
+          tafALL <- bind_rows(tafNorth, tafEast, tafSouth, tafWest)
+          
+          # Limit to the first 3 rows for display and remove the 'fcsts' column
+          data <- tafALL |>
+            select(-fcsts)
+          
+          return(data)
+        } else {
+          # For other endpoints (metar, airport), fetch data using build_url
+          data <- build_url(endpoint = endpoint,
+                            icaoIDs = icaoIDs,
+                            hours = hours,
+                            time = time)
+          
+          return(data)
+        }
+      })
+      
+      # Render the table for display
+      output$dataTableDownload <- renderTable({
+        dataToDisplay()
+      })
+      
+      # Download button logic
+      observeEvent(input$downloadButton, {
+        # Determine file name based on selected endpoint and format
+        endpoint <- input$endpoint_dd
+        fileFormat <- substr(input$format_dd, 2, 5)  # Extract ".csv" or ".xls"
+        fileName <- paste0(endpoint, "_data", fileFormat)
+        
+        # Write data to a temporary file
+        tempData <- dataToDisplay()
+        if (fileFormat == ".csv") {
+          write.csv(tempData, file = fileName, row.names = FALSE)
+        } else if (fileFormat == ".xls") {
+          # Assuming you have data in a data frame format, you can use `writexl` library for writing to Excel
+          writexl::write_xlsx(tempData, fileName)
+        }
+        
+        # Serve the file to download
+        shiny::downloadHandler(
+          filename = fileName,
+          content = function(file) {
+            file.copy(fileName, file)
+          }
+        )
+      })
+    
+      
+      
 # DATA EXPLORATION #
+      
+      
+    # Creates the dynamic box on tab to choose variables.
+      output$var_select_ui <- renderUI({
+        if (input$data_source == "metar") {
+          selectInput("variables", "Select Variables:",
+                      choices = c("temp", "wspd", "visib", "state"),
+                      selected = c("temp", "wspd"), multiple = TRUE)
+        } else {
+          selectInput("variables", "Select Variables:",
+                      choices = c("state", "runway_length", "runway_width", "runway_surface", "rwyNum"),
+                      selected = c("runway_length", "runway_width"), multiple = TRUE)
+        }
+      })
+
+
+    # Creates the faceting tool            
+      output$facet_var_ui <- renderUI({
+        if (input$data_source == "metar") {
+          selectInput("facet_var", "Select Facet Variable:",
+                      choices = c("None", "state"))
+        } else {
+          selectInput("facet_var", "Select Facet Variable:",
+                      choices = c("None", "state", "runway_surface"))
+        }
+      })
+
+
+    # Calls the build_url function and sets appropriate parameters
+      get_data <- reactive({
+        req(input$data_source)
+        if (input$data_source == "metar") {
+          data <- build_url(endpoint = "metar", hours = 24, icaoIDs = "#US")
+        } else {
+          data <- build_url(endpoint = "airport", icaoIDs = "#US")
+        }
+        return(data)
+      })
+
+      
+    # Creates the ploy dynamically depending on the sidebarPanel inputs.       
+      output$data_plot <- renderPlot({
+        req(input$variables)
+        data <- get_data()
+        
+        # Subset data based on selected variables
+        data <- data[, input$variables, drop = FALSE]
+        
+        # Generate plot
+        p <- ggplot(data, aes_string(x = input$variables[1], y = if(length(input$variables) > 1) input$variables[2] else NULL)) +
+          {switch(input$plot_type,
+                  "Scatter Plot" = geom_point(),
+                  "Bar Plot" = geom_bar(stat = "identity"),
+                  "Histogram" = geom_histogram(binwidth = 1),  # Use binwidth to prevent potential issues
+                  "Box Plot" = geom_boxplot())}
+        
+        # Add faceting if selected
+        if (input$facet_var != "None") {
+          p <- p + facet_wrap(as.formula(paste("~", input$facet_var)))
+        }
+        
+        # Print plot object after faceting for debugging
+        print("Plot object after faceting:")
+        print(p)
+      })
+      
+
+    # Handles the printing of the tibble summary stats beneath the plot.       
+      output$data_summary <- renderPrint({
+        req(input$variables)
+        data <- get_data()
+
+        # Check for missing values and data types
+        data <- data %>%
+          mutate(across(all_of(input$variables), as.numeric, .names = "num_{.col}"))
+        
+        # Filter out rows with NA values in the numeric columns
+        data <- data %>%
+          filter(across(starts_with("num_"), ~ !is.na(.)))
+
+        # Generate summary based on selected variables and summary type
+        summary_data <- data %>%
+          summarise(across(starts_with("num_"), 
+                           list(mean = ~mean(.x, na.rm = TRUE), 
+                                median = ~median(.x, na.rm = TRUE), 
+                                sd = ~sd(.x, na.rm = TRUE), 
+                                count = ~sum(!is.na(.x))), 
+                           .names = "{.fn}_{.col}"))
+        
+        # Print summary data for debugging
+        print("Summary Data:")
+        print(summary_data)
+        
+        # Select summary type
+        summary_type <- switch(input$summary_type,
+                               "Mean" = summary_data %>% select(ends_with("_mean")),
+                               "Median" = summary_data %>% select(ends_with("_median")),
+                               "Standard Deviation" = summary_data %>% select(ends_with("_sd")),
+                               "Count" = summary_data %>% select(ends_with("_count")))
+        
+        print(summary_type)
+      })
 
 
 
